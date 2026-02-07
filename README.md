@@ -117,6 +117,7 @@ bash code/05_run_prsice2.sh temp/npi_anx_ever.pheno
 
 # Copy key results to the report folder
 cp temp/*.prs.log report/
+cp temp/*.prs.prsice report/
 cp temp/*.prs.summary report/
 cp temp/*.prs*.png report/
 
