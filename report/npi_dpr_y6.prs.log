@@ -6,7 +6,7 @@ If you use PRSice in any published work, please cite:
 Choi SW, O'Reilly PF.
 PRSice-2: Polygenic Risk Score Software for Biobank-Scale Data.
 GigaScience 8, no. 7 (July 1, 2019)
-2026-02-06 17:48:30
+2026-02-07 14:19:35
 /usr/local/apps/prsice/2.3.3/bin/PRSice \
     --a1 A1 \
     --a2 A2 \
@@ -21,16 +21,16 @@ GigaScience 8, no. 7 (July 1, 2019)
     --clump-kb 250kb \
     --clump-p 1.000000 \
     --clump-r2 0.100000 \
-    --cov temp/depr1_y2_prsice.txt \
-    --cov-col AGE,PTGENDER,APOE4,PTEDUCAT,DX_MCI,DX_AD,PC1,PC2 \
+    --cov temp/npi_dpr_y6.pheno \
+    --cov-col AGE,PTGENDER,APOE4,PTEDUCAT,DX_MCI,DX_AD,PC1,PC2,PC3,PC4 \
     --fastscore  \
     --num-auto 22 \
-    --out temp/prsice/nprs_depr1_y2 \
-    --pheno temp/depr1_y2_prsice.txt \
-    --pheno-col DEPR1 \
+    --out temp/npi_dpr_y6.prs \
+    --pheno temp/npi_dpr_y6.pheno \
+    --pheno-col PHENO \
     --print-snp  \
     --pvalue P \
-    --seed 3931764066 \
+    --seed 2389083759 \
     --snp SNP \
     --stat BETA \
     --target temp/adni1_qc_final \
@@ -58,7 +58,7 @@ Loading Genotype info from target
 38 variant(s) with mismatch information 
 5721320 variant(s) included 
 
-Phenotype file: temp/depr1_y2_prsice.txt 
+Phenotype file: temp/npi_dpr_y6.pheno 
 Column Name of Sample ID: FID+IID 
 Note: If the phenotype file does not contain a header, the 
 column name will be displayed as the Sample ID which is 
@@ -72,12 +72,12 @@ Number of variant(s) after clumping : 303601
 
 Processing the 1 th phenotype 
 
-DEPR1 is a binary phenotype 
-120 sample(s) without phenotype 
-470 control(s) 
-47 case(s) 
+PHENO is a binary phenotype 
+446 sample(s) without phenotype 
+135 control(s) 
+56 case(s) 
 
-Processing the covariate file: temp/depr1_y2_prsice.txt 
+Processing the covariate file: temp/npi_dpr_y6.pheno 
 ============================== 
 
 Include Covariates: 
@@ -90,8 +90,10 @@ DX_MCI	0	-
 DX_AD	0	- 
 PC1	0	- 
 PC2	0	- 
+PC3	0	- 
+PC4	0	- 
 
-After reading the covariate file, 517 sample(s) included in 
+After reading the covariate file, 191 sample(s) included in 
 the analysis 
 
 There are 1 region(s) with p-value between 0.1 and 1e-5 

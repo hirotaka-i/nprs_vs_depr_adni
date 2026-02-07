@@ -31,6 +31,7 @@ library(ADNIMERGE)
 # Load ADNI data
 data(adnimerge)
 data(gdscale)
+data(npi)
 
 cat("=== Data loaded ===\n")
 cat("adnimerge dimensions:", dim(adnimerge), "\n")
@@ -60,24 +61,42 @@ adni_subset <- adnimerge %>%
   mutate(
     RID = as.character(RID),
     VISCODE = as.character(VISCODE)
-  )
+  ) %>% distinct(RID, VISCODE, .keep_all = TRUE)  # Keep only unique RID-VISCODE combinations
 
-# Select relevant variables from gdscale
+# Select relevant variables from gdscale (GDS5 = GDS >= 5, GDS10 = GDS >= 10)
 gds_subset <- gdscale %>%
   select(RID, VISCODE, GDTOTAL) %>%
+  filter(!is.na(GDTOTAL)) %>%  # Keep only rows with non-missing GDTOTAL
   mutate(
     RID = as.character(RID),
-    VISCODE = as.character(VISCODE)
-  )
+    VISCODE = as.character(VISCODE),
+    GDS5 = if_else(GDTOTAL >= 5, 1, 0),
+    GDS10 = if_else(GDTOTAL >= 10, 1, 0)
+  ) %>% 
+  distinct(RID, VISCODE, .keep_all = TRUE)  # Keep only unique RID-VISCODE combinations
+
+# Select NPI variables from  npi (NPI_DPR = NPI Depression, NPI_ANX = NPI Anxiety)
+npi_subset <- npi %>%
+  select(RID, VISCODE, NPID, NPIE) %>%
+  filter(!is.na(NPID) & !is.na(NPIE)) %>%  # Keep only rows with non-missing NPID and NPIE
+  mutate(
+    RID = as.character(RID),
+    VISCODE = as.character(VISCODE),
+    NPI_DPR = case_when(NPID=='Yes' ~ 1, NPID=='No' ~ 0, TRUE ~ NA_real_),
+    NPI_ANX = case_when(NPIE=='Yes' ~ 1, NPIE=='No' ~ 0, TRUE ~ NA_real_)
+  ) %>% 
+  distinct(RID, VISCODE, .keep_all = TRUE)  # Keep only unique RID-VISCODE combinations
+
 
 cat("\n=== Joining datasets ===\n")
 
 # Join adnimerge and gdscale
 pheno <- adni_subset %>%
   left_join(gds_subset, by = c("RID", "VISCODE")) %>%
+  left_join(npi_subset, by = c("RID", "VISCODE")) %>%
   mutate(PTID = as.character(PTID))
 
-cat("After joining adnimerge and gdscale:", nrow(pheno), "rows\n")
+cat("After joining adnimerge, gdscale, and npi:", nrow(pheno), "rows\n")
 
 # Keep only subjects with genetic data and add IID
 pheno <- pheno %>%
@@ -93,39 +112,34 @@ pheno <- pheno %>%
     VISCODE == "bl" ~ 0,
     grepl("^m", VISCODE) ~ as.numeric(gsub("m", "", VISCODE)),
     TRUE ~ as.numeric(VISCODE)
-  ))
+  )) %>% filter(!is.na(timepoint))  # Keep only rows with valid timepoints
 
 cat("\n=== Timepoint distribution ===\n")
 print(table(pheno$timepoint, useNA = "ifany"))
 
-# Create depression variables
-pheno <- pheno %>%
-  mutate(
-    DEPR1 = case_when(
-      is.na(GDTOTAL) ~ NA_real_,
-      GDTOTAL >= 5 ~ 1,
-      GDTOTAL < 5 ~ 0
-    ),
-    DEPR2 = case_when(
-      is.na(GDTOTAL) ~ NA_real_,
-      GDTOTAL >= 10 ~ 1,
-      GDTOTAL < 10 ~ 0
-    )
-  )
-
+# Outcome distribution checks
 cat("\n=== Depression variable distribution ===\n")
-cat("\nDEPR1 (GDS >= 5):\n")
-print(table(pheno$DEPR1, useNA = "ifany"))
-
-cat("\nDEPR2 (GDS >= 10):\n")
-print(table(pheno$DEPR2, useNA = "ifany"))
+cat("\nGDS >= 5:\n")
+print(table(pheno$GDS5, useNA = "ifany"))
+cat("\nGDS >= 10:\n")
+print(table(pheno$GDS10, useNA = "ifany"))
+cat("\n=== NPI Depression ===\n")
+print(table(pheno$NPI_DPR, useNA = "ifany"))
+cat("\n=== NPI Anxiety ===\n")
+print(table(pheno$NPI_ANX, useNA = "ifany"))
 
 # Distribution over timepoints
-cat("\n=== DEPR1 by timepoint ===\n")
-print(table(pheno$timepoint, pheno$DEPR1, useNA = "ifany"))
+cat("\n=== GDS >= 5 by timepoint ===\n")
+print(table(pheno$timepoint, pheno$GDS5, useNA = "ifany"))
 
-cat("\n=== DEPR2 by timepoint ===\n")
-print(table(pheno$timepoint, pheno$DEPR2, useNA = "ifany"))
+cat("\n=== GDS >= 10 by timepoint ===\n")
+print(table(pheno$timepoint, pheno$GDS10, useNA = "ifany"))
+
+cat("\n=== NPI Depression by timepoint ===\n")
+print(table(pheno$timepoint, pheno$NPI_DPR, useNA = "ifany"))
+
+cat("\n=== NPI Anxiety by timepoint ===\n")
+print(table(pheno$timepoint, pheno$NPI_ANX, useNA = "ifany"))
 
 # Summary statistics
 cat("\n=== Summary Statistics ===\n")
@@ -163,20 +177,74 @@ cat("APOE4:\n")
 print(table(pheno$APOE4, useNA = "ifany"))
 
 cat("\n=== Data preview ===\n")
-print(head(pheno, 20))
+print(head(pheno, 10))
 
 # Based on the distribution of timepoints and depression variables, 
 # we will focus on the 12-month timepoint and 24-month cross-sectional data
 pheno %>% filter(timepoint==12) %>%
-    select(IID, DEPR1,
-    AGE, PTGENDER, APOE4, PTEDUCAT, SITE, DX.bl) %>%
+    select(IID, GDS5, AGE, PTGENDER, APOE4, PTEDUCAT, SITE, DX.bl) %>%
     filter(complete.cases(.)) %>% 
     distinct(IID, .keep_all = TRUE) %>%
-    write.csv(file.path(output_dir, "depr1_y1.csv"), row.names = FALSE)
+    write.csv(file.path(output_dir, "gds5_y1.csv"), row.names = FALSE)
 
 pheno %>% filter(timepoint==24) %>%
-    select(IID, DEPR1,
-    AGE, PTGENDER, APOE4, PTEDUCAT, SITE, DX.bl) %>%
+    select(IID, GDS5, AGE, PTGENDER, APOE4, PTEDUCAT, SITE, DX.bl) %>%
     filter(complete.cases(.)) %>% 
     distinct(IID, .keep_all = TRUE) %>%
-    write.csv(file.path(output_dir, "depr1_y2.csv"), row.names = FALSE)
+    write.csv(file.path(output_dir, "gds5_y2.csv"), row.names = FALSE)
+# for DPI_DPR and NPI_ANX, we will use timepoint 72
+pheno %>% filter(timepoint==72) %>%
+    select(IID, NPI_DPR, AGE, PTGENDER, APOE4, PTEDUCAT, SITE, DX.bl) %>%
+    filter(complete.cases(.)) %>% 
+    distinct(IID, .keep_all = TRUE) %>%
+    write.csv(file.path(output_dir, "npi_dpr_y6.csv"), row.names = FALSE)
+
+pheno %>% filter(timepoint==72) %>%
+    select(IID, NPI_ANX, AGE, PTGENDER, APOE4, PTEDUCAT, SITE, DX.bl) %>%
+    filter(complete.cases(.)) %>% 
+    distinct(IID, .keep_all = TRUE) %>%
+    write.csv(file.path(output_dir, "npi_anx_y6.csv"), row.names = FALSE)
+
+
+# NPI_DPR_EVER: Create a variable indicating if the subject ever had NPI_DPR=1
+# keep the timepoint of first NPI_DPR or last follow-up if never
+npi_depr_ever <- pheno %>%
+  filter(!is.na(NPI_DPR)) %>%
+  group_by(IID) %>%
+  arrange(timepoint) %>%
+  slice(if(any(NPI_DPR == 1)) which(NPI_DPR == 1)[1] else n()) %>%
+  ungroup() %>%
+  rename(NPI_DPR_EVER = NPI_DPR, timepoint_censored = timepoint) %>%
+  select(IID, timepoint_censored, NPI_DPR_EVER, AGE, PTGENDER, APOE4, PTEDUCAT, SITE, DX.bl) %>%
+  filter(complete.cases(.))
+
+cat("\nNPI_DPR_EVER distribution:\n")
+print(table(npi_depr_ever$NPI_DPR_EVER, useNA = "ifany"))
+npi_depr_ever %>%
+  write.csv(file.path(output_dir, "npi_dpr_ever.csv"), row.names = FALSE)
+
+# NPI_ANX_EVER: Create a variable indicating if the subject ever had NPI_ANX=1
+# keep the timepoint of first NPI_ANX or last follow-up if never
+npi_anx_ever <- pheno %>%
+  filter(!is.na(NPI_ANX)) %>%
+  group_by(IID) %>%
+  arrange(timepoint) %>%
+  slice(if(any(NPI_ANX == 1)) which(NPI_ANX == 1)[1] else n()) %>%
+  ungroup() %>%
+  rename(NPI_ANX_EVER = NPI_ANX, timepoint_censored = timepoint) %>%
+  select(IID, timepoint_censored, NPI_ANX_EVER, AGE, PTGENDER, APOE4, PTEDUCAT, SITE, DX.bl) %>%
+  filter(complete.cases(.))
+
+cat("\nNPI_ANX_EVER distribution:\n")
+print(table(npi_anx_ever$NPI_ANX_EVER, useNA = "ifany"))
+npi_anx_ever %>%
+  write.csv(file.path(output_dir, "npi_anx_ever.csv"), row.names = FALSE)
+
+
+cat('Output files saved in:', output_dir, "\n")
+cat("gds5_y1.csv: Year 1 (12-month) GDS >= 5 phenotype\n")
+cat("gds5_y2.csv: Year 2 (24-month) GDS >= 5 phenotype\n")
+cat("npi_dpr_y6.csv: Year 6 (72-month) NPI Depression phenotype\n")
+cat("npi_anx_y6.csv: Year 6 (72-month) NPI Anxiety phenotype\n")
+cat("npi_dpr_ever.csv: NPI Depression EVER phenotype with timepoint of censoring (first occurrence or last follow-up)\n")
+cat("npi_anx_ever.csv: NPI Anxiety EVER phenotype with timepoint of censoring (first occurrence or last follow-up)\n")  

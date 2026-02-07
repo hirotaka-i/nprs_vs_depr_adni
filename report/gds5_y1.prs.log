@@ -1,0 +1,101 @@
+PRSice 2.3.3 (2020-08-05) 
+https://github.com/choishingwan/PRSice
+(C) 2016-2020 Shing Wan (Sam) Choi and Paul F. O'Reilly
+GNU General Public License v3
+If you use PRSice in any published work, please cite:
+Choi SW, O'Reilly PF.
+PRSice-2: Polygenic Risk Score Software for Biobank-Scale Data.
+GigaScience 8, no. 7 (July 1, 2019)
+2026-02-07 14:12:51
+/usr/local/apps/prsice/2.3.3/bin/PRSice \
+    --a1 A1 \
+    --a2 A2 \
+    --all-score  \
+    --bar-levels 5e-08,5e-07,5e-06,5e-05,0.0005,0.005,0.05,0.5,1 \
+    --base temp/neuroticism_gwas_qc.txt.gz \
+    --base-info INFO:0.9 \
+    --beta  \
+    --binary-target T \
+    --bp BP \
+    --chr CHR \
+    --clump-kb 250kb \
+    --clump-p 1.000000 \
+    --clump-r2 0.100000 \
+    --cov temp/gds5_y1.pheno \
+    --cov-col AGE,PTGENDER,APOE4,PTEDUCAT,DX_MCI,DX_AD,PC1,PC2,PC3,PC4 \
+    --fastscore  \
+    --num-auto 22 \
+    --out temp/gds5_y1.prs \
+    --pheno temp/gds5_y1.pheno \
+    --pheno-col PHENO \
+    --print-snp  \
+    --pvalue P \
+    --seed 1780509406 \
+    --snp SNP \
+    --stat BETA \
+    --target temp/adni1_qc_final \
+    --thread 4
+
+Initializing Genotype file: temp/adni1_qc_final (bed) 
+
+Start processing neuroticism_gwas_qc.txt 
+================================================== 
+
+Base file: temp/neuroticism_gwas_qc.txt.gz 
+GZ file detected. Header of file is: 
+SNP	CHR	BP	A1	A2	BETA	SE	P	MAF	INFO	A1_FREQ 
+
+6261588 variant(s) observed in base file, with: 
+6261588 total variant(s) included from base file 
+
+Loading Genotype info from target 
+================================================== 
+
+637 people (0 male(s), 0 female(s)) observed 
+637 founder(s) included 
+
+3243246 variant(s) not found in previous data 
+38 variant(s) with mismatch information 
+5721320 variant(s) included 
+
+Phenotype file: temp/gds5_y1.pheno 
+Column Name of Sample ID: FID+IID 
+Note: If the phenotype file does not contain a header, the 
+column name will be displayed as the Sample ID which is 
+expected. 
+
+There are a total of 1 phenotype to process 
+
+Start performing clumping 
+
+Number of variant(s) after clumping : 303601 
+
+Processing the 1 th phenotype 
+
+PHENO is a binary phenotype 
+64 sample(s) without phenotype 
+527 control(s) 
+46 case(s) 
+
+Processing the covariate file: temp/gds5_y1.pheno 
+============================== 
+
+Include Covariates: 
+Name	Missing	Number of levels 
+AGE	0	- 
+PTGENDER	0	- 
+APOE4	0	- 
+PTEDUCAT	0	- 
+DX_MCI	0	- 
+DX_AD	0	- 
+PC1	0	- 
+PC2	0	- 
+PC3	0	- 
+PC4	0	- 
+
+After reading the covariate file, 573 sample(s) included in 
+the analysis 
+
+There are 1 region(s) with p-value between 0.1 and 1e-5 
+(may not be significant). 
+

@@ -1,153 +1,141 @@
+# 04_prepare_prsice_phenotype.R
 # Prepare PRSice-2 input files by merging phenotype data with PCs
 
 library(tidyverse)
 
+# Get command line arguments
+args <- commandArgs(trailingOnly = TRUE)
+
+if (length(args) < 2) {
+  cat("Usage: Rscript 04_prepare_prsice_phenotype.R <outcome_variable> <phenotype_file.csv>\n")
+  cat("Example: Rscript 04_prepare_prsice_phenotype.R \"GDS5\" temp/gds5_y1.csv\n")
+  quit(status = 1)
+}
+
 # Set paths
-pheno_y1_file <- "temp/depr1_y1.csv"
-pheno_y2_file <- "temp/depr1_y2.csv"
+outcome_var <- args[1]
+pheno_file <- args[2]
 pc_file <- "temp/adni1_pcs.eigenvec"
-output_y1 <- "temp/depr1_y1_prsice.txt"
-output_y2 <- "temp/depr1_y2_prsice.txt"
 
-cat("=============================================\n")
-cat("Step 4: Prepare PRSice-2 Phenotype Files\n")
-cat("=============================================\n\n")
+# Generate output filename: replace .csv with .pheno
+output_file <- sub("\\.csv$", ".pheno", pheno_file)
 
-# Read phenotype files
-cat("Reading phenotype files...\n")
-pheno_y1 <- read.csv(pheno_y1_file, stringsAsFactors = FALSE)
-pheno_y2 <- read.csv(pheno_y2_file, stringsAsFactors = FALSE)
+cat("===========================================\n")
+cat("Step 4: Prepare PRSice-2 Phenotype File\n")
+cat("===========================================\n\n")
+cat("Input file:", pheno_file, "\n")
+cat("Output file:", output_file, "\n")
+cat("Outcome variable:", outcome_var, "\n\n")
 
-cat("Year 1 phenotype: ", nrow(pheno_y1), "samples\n")
-cat("Year 2 phenotype: ", nrow(pheno_y2), "samples\n\n")
+# Read phenotype file
+cat("Reading phenotype file...\n")
+pheno <- read.csv(pheno_file, stringsAsFactors = FALSE)
+cat("Samples:", nrow(pheno), "\n")
+cat("Columns:", paste(colnames(pheno), collapse = ", "), "\n\n")
+
+# Check if outcome variable exists
+if (!outcome_var %in% colnames(pheno)) {
+  cat("ERROR: Outcome variable", outcome_var, "not found in phenotype file\n")
+  quit(status = 1)
+}
 
 # Read PC file
 cat("Reading PC file...\n")
 # PLINK2 eigenvec format: FID IID PC1 PC2 ... PC10
 pcs <- read.table(pc_file, header = FALSE, stringsAsFactors = FALSE)
 colnames(pcs) <- c("FID", "IID", paste0("PC", 1:10))
+cat("PC file:", nrow(pcs), "samples\n\n")
 
-cat("PC file: ", nrow(pcs), "samples\n\n")
+# Merge with PCs
+cat("Merging phenotype with PCs...\n")
+merged <- pheno %>%
+  left_join(pcs %>% select(-FID), by = "IID")
 
-# Function to prepare phenotype file
-prepare_prsice_pheno <- function(pheno_df, pcs_df, cohort_name) {
-  
-  cat("Processing", cohort_name, "...\n")
-  
-  # Merge with PCs
-  merged <- pheno_df %>%
-    left_join(pcs_df, by = "IID")
-  
-  cat("  After merging with PCs:", nrow(merged), "samples\n")
-  
-  # Check for missing PCs
-  missing_pcs <- sum(is.na(merged$PC1))
-  if (missing_pcs > 0) {
-    cat("  WARNING:", missing_pcs, "samples missing PC data\n")
-    merged <- merged %>% filter(!is.na(PC1))
-    cat("  After removing samples without PCs:", nrow(merged), "samples\n")
-  }
-  
-  # Convert PTGENDER to binary (Male=1, Female=0)
-  merged <- merged %>%
-    mutate(PTGENDER = ifelse(PTGENDER == "Male", 1, 0))
-  
-  cat("  Gender distribution (0=Female, 1=Male):\n")
-  print(table(merged$PTGENDER))
-  
-  # Create dummy variables for DX.bl (CN as reference)
-  cat("  Baseline diagnosis distribution:\n")
-  print(table(merged$DX.bl))
-  
-  merged <- merged %>%
-    mutate(
-      DX_MCI = ifelse(DX.bl == "MCI", 1, 0),
-      DX_AD = ifelse(DX.bl == "AD", 1, 0)
-    )
-  
-  # Create dummy variables for SITE (first site alphabetically as reference)
-  cat("  Site distribution:\n")
-  site_table <- table(merged$SITE)
-  print(site_table)
-  
-  # Get unique sites and create dummies (exclude first as reference)
-#   sites <- sort(unique(merged$SITE))
-#   cat("  Using", sites[1], "as reference site\n")
-  
-#   for (i in 2:length(sites)) {
-#     site_name <- paste0("SITE_", sites[i])
-#     merged[[site_name]] <- ifelse(merged$SITE == sites[i], 1, 0)
-#   }
-  # Too many sites! Drop the sites variable for this analysis. 
-  
-  # Create FID column (same as IID for unrelated individuals)
-  merged <- merged %>%
-    mutate(FID = 0)
-  
-  # Select and reorder columns: FID, IID first, then phenotype and covariates
-  site_cols <- grep("^SITE_", colnames(merged), value = TRUE)
-  
-  final_df <- merged %>%
-    select(FID, IID, DEPR1, AGE, PTGENDER, APOE4, PTEDUCAT, 
-           DX_MCI, DX_AD, all_of(site_cols),
-           PC1, PC2, PC3, PC4, PC5, PC6, PC7, PC8, PC9, PC10)
-  
-  cat("  Final dimensions:", nrow(final_df), "samples x", ncol(final_df), "variables\n")
-  cat("  Columns:", paste(colnames(final_df), collapse=", "), "\n")
-  
-  return(final_df)
+cat("After merging:", nrow(merged), "samples\n")
+
+# Check for missing PCs
+missing_pcs <- sum(is.na(merged$PC1))
+if (missing_pcs > 0) {
+  cat("WARNING:", missing_pcs, "samples missing PC data\n")
+  merged <- merged %>% filter(!is.na(PC1))
+  cat("After removing samples without PCs:", nrow(merged), "samples\n")
 }
 
-# Process Year 1
-cat("\n")
-cat("==========================================\n")
-prsice_y1 <- prepare_prsice_pheno(pheno_y1, pcs, "Year 1")
+# Convert PTGENDER to binary (Male=1, Female=0)
+cat("\nConverting categorical variables...\n")
+merged <- merged %>%
+  mutate(PTGENDER = ifelse(PTGENDER == "Male", 1, 0))
 
-# Process Year 2
-cat("\n")
-cat("==========================================\n")
-prsice_y2 <- prepare_prsice_pheno(pheno_y2, pcs, "Year 2")
+cat("Gender distribution (0=Female, 1=Male):\n")
+print(table(merged$PTGENDER))
+
+# Create dummy variables for DX.bl (CN as reference)
+cat("\nBaseline diagnosis distribution:\n")
+print(table(merged$DX.bl))
+
+merged <- merged %>%
+  mutate(
+    DX_MCI = ifelse(DX.bl == "MCI", 1, 0),
+    DX_AD = ifelse(DX.bl == "AD", 1, 0)
+  )
+
+# Note: SITE variable dropped due to too many categories
+cat("\nNote: SITE variable not included (too many categories)\n")
+
+# Create FID column (set to 0 for all, as IID is unique)
+merged <- merged %>%
+  mutate(FID = 0)
+
+# Rename outcome variable to standardized name for PRSice-2
+merged <- merged %>%
+  rename(PHENO = !!sym(outcome_var))
+
+# Select and reorder columns: FID, IID first, then phenotype and covariates
+# Include timepoint_censored if it exists (for EVER outcomes)
+base_cols <- c("FID", "IID", "PHENO", "AGE", "PTGENDER", "APOE4", "PTEDUCAT", 
+               "DX_MCI", "DX_AD")
+pc_cols <- paste0("PC", 1:10)
+
+if ("timepoint_censored" %in% colnames(merged)) {
+  final_cols <- c(base_cols, "timepoint_censored", pc_cols)
+} else {
+  final_cols <- c(base_cols, pc_cols)
+}
+
+final_df <- merged %>%
+  select(all_of(final_cols))
+
+cat("\nFinal dimensions:", nrow(final_df), "samples x", ncol(final_df), "variables\n")
+cat("Columns:", paste(colnames(final_df), collapse = ", "), "\n")
 
 # Check for missing data
-cat("\n")
-cat("==========================================\n")
-cat("Missing Data Summary\n")
-cat("==========================================\n")
-
-cat("\nYear 1:\n")
-missing_y1 <- colSums(is.na(prsice_y1))
-if (any(missing_y1 > 0)) {
-  print(missing_y1[missing_y1 > 0])
+cat("\nMissing data summary:\n")
+missing <- colSums(is.na(final_df))
+if (any(missing > 0)) {
+  print(missing[missing > 0])
 } else {
-  cat("  No missing data\n")
+  cat("No missing data\n")
 }
 
-cat("\nYear 2:\n")
-missing_y2 <- colSums(is.na(prsice_y2))
-if (any(missing_y2 > 0)) {
-  print(missing_y2[missing_y2 > 0])
-} else {
-  cat("  No missing data\n")
+# Outcome distribution
+cat("\nOutcome (PHENO) distribution:\n")
+print(table(final_df$PHENO, useNA = "ifany"))
+
+# Save output
+cat("\nSaving output file...\n")
+write.table(final_df, output_file, 
+            row.names = FALSE, quote = FALSE, sep = "\t")
+
+cat("\n===========================================\n")
+cat("COMPLETE!\n")
+cat("===========================================\n")
+cat("Output file:", output_file, "\n")
+cat("Samples:", nrow(final_df), "\n")
+cat("\nFor PRSice-2, use:\n")
+cat("  --pheno", output_file, "\n")
+cat("  --pheno-col PHENO\n")
+cat("  --cov-col AGE,PTGENDER,APOE4,PTEDUCAT,DX_MCI,DX_AD,PC1-PC4\n")
+if ("timepoint_censored" %in% colnames(final_df)) {
+  cat("  Note: timepoint_censored available for survival analysis\n")
 }
-
-# Save outputs
-cat("\n")
-cat("==========================================\n")
-cat("Saving output files...\n")
-cat("==========================================\n")
-
-write.table(prsice_y1, output_y1, 
-            row.names = FALSE, quote = FALSE, sep = "\t")
-cat("Year 1 phenotype saved to:", output_y1, "\n")
-cat("  Samples:", nrow(prsice_y1), "\n")
-
-write.table(prsice_y2, output_y2, 
-            row.names = FALSE, quote = FALSE, sep = "\t")
-cat("Year 2 phenotype saved to:", output_y2, "\n")
-cat("  Samples:", nrow(prsice_y2), "\n")
-
-cat("\n")
 cat("===========================================\n")
-cat("SUMMARY\n")
-cat("===========================================\n")
-cat("Phenotype files ready for PRSice-2\n")
