@@ -115,6 +115,10 @@ bash code/05_run_prsice2.sh temp/npi_anx_y6.pheno
 bash code/05_run_prsice2.sh temp/npi_dpr_ever.pheno
 bash code/05_run_prsice2.sh temp/npi_anx_ever.pheno
 
+# Step 6: KM plots for time-to-event outcomes
+python code/06_km_curves_ps_anx.py
+python code/06_km_curves_ps_dpr.py
+
 # Copy key results to the report folder
 cp temp/*.prs.log report/
 cp temp/*.prs.prsice report/
