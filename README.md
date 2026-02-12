@@ -134,3 +134,192 @@ Key results are also copied at `report/` for easy access.
 - Analysis uses European ancestry samples only (pre-QC'd)
 - Year 1 (12-month) data is primary analysis; Year 2 available for replication
 - Depression prevalence may be low in ADNI (cognitively normal/MCI enriched cohort)
+
+----
+----
+
+# 5-Fold Cross-Validation for PRS Optimization
+
+### Overview
+Perform hyperparameter tuning for PRSice-2 using 5-fold cross-validation to identify optimal clumping r² and p-value threshold parameters while avoiding overfitting (winner's curse).
+
+### Input Requirements
+- **Phenotype file**: `temp/<outcome>.pheno` (output from Step 4)
+- **GWAS summary statistics**: `temp/neuroticism_gwas_qc.txt.gz` (from Step 2)
+- **Genotype data**: `temp/adni1_qc_final.*` (from Step 3)
+
+### Scripts
+
+#### **cv_grid_search.sh** (Master script - Steps 1-5)
+Runs the complete CV pipeline automatically.
+
+**Usage:**
+```bash
+bash code/cv_grid_search.sh temp/npi_dpr_ever.pheno
+```
+
+**What it does:**
+1. Creates stratified folds
+2. Runs grid search on training sets
+3. Evaluates on held-out test sets
+4. Summarizes results with visualizations
+5. Recommends optimal parameters
+
+---
+
+#### **Step 1: cv_create_folds.R**
+Creates 5 stratified folds balanced by phenotype, sex, baseline diagnosis, and age.
+
+**Outputs:**
+- `fold_assignments.csv` - Subject-to-fold mapping
+- `train_fold_k.keep` - Training set IDs (k=1..5)
+- `test_fold_k.keep` - Test set IDs (k=1..5)
+
+**Stratification variables:**
+- PHENO (case/control)
+- PTGENDER (sex)
+- DX.bl (baseline diagnosis: CN/MCI/AD)
+- AGE (quartiles)
+
+---
+
+#### **Step 2-3: cv_train_grid.sh**
+Grid search over hyperparameters on training sets.
+
+**Parameter grid:**
+- **Clumping r²**: 0.01, 0.05, 0.1, 0.2, 0.5
+- **P-value thresholds**: 5e-8, 1e-6, 1e-5, 1e-4, 1e-3, 5e-3, 1e-2, 5e-2, 1e-1, 0.5, 1
+
+**Total runs:** 5 folds × 5 r² values = 25 PRSice runs
+
+**Outputs:**
+- `training/fold_k_r2_*.prsice` - Training results for each parameter combination
+- `training/best_params_per_fold.csv` - Best parameters selected per fold
+
+---
+
+#### **Step 4: cv_test_best.sh**
+Evaluates best parameters on held-out test sets.
+
+**For each fold:**
+- Uses parameters selected from training
+- Runs PRSice once on test set
+- Records R², P-value, number of SNPs
+
+**Outputs:**
+- `testing/fold_k_test.*` - Test set results
+- `testing/test_results.csv` - Summary of test performance
+
+---
+
+#### **Step 5: cv_summarize.R**
+Aggregates results and generates comprehensive summary with figures.
+
+**If all the step1-4 are done, we can rerun this with the following command:**
+```bash
+Rscript code/cv_summarize.R temp/npi_dpr_ever.pheno
+```
+
+**Outputs:**
+
+**Tables:**
+- `results/cv_summary.txt` - Human-readable summary
+- `results/recommended_params.txt` - Parameter recommendations
+- `results/cv_results_aggregated.csv` - Performance by parameter combination
+- `results/cv_results_test.csv` - Test fold results
+- `results/cv_results_full.csv` - All training results
+- `results/forest_plot_data.csv` - Meta-analysis data
+- `results/auc_by_fold.csv` - AUC per fold
+- `results/quantile_summary.csv` - Prevalence by PRS quartile
+- `results/quantile_regression_coefs.csv` - Adjusted associations
+
+**Figures:**
+
+1. **figure1_forest_plot.png**
+   - OR (95% CI) per SD increase in PRS for each test fold
+   - Meta-analyzed effect across folds (red)
+   - Shows heterogeneity across folds
+
+2. **figure2_roc_curve.png**
+   - Pooled ROC curve from all test folds
+   - Overall AUC with 95% CI
+   - Reference diagonal (chance line)
+
+3. **figure3_roc_by_fold.png**
+   - Individual ROC curves for each test fold (gray)
+   - Mean ROC curve (dark blue)
+   - Pointwise 95% confidence band (shaded)
+   - Demonstrates consistency across folds
+
+4. **figure4_quantile_analysis.png** (3 panels)
+   - **Panel A**: PRS distribution by quartile (boxplot)
+   - **Panel B**: Unadjusted depression prevalence by quartile (bar chart)
+   - **Panel C**: Adjusted log odds ratios (beta coefficients)
+     - Adjusted for: AGE, PTGENDER, APOE4, PTEDUCAT, DX_MCI, DX_AD, PC1-4
+     - Shows dose-response relationship
+
+---
+
+#### **Step 6: cv_final_model.sh** (User decision)
+Train final model on full cohort with user-selected parameters.
+
+**Usage:**
+```bash
+bash code/cv_final_model.sh temp/npi_dpr_ever.pheno <clump_r2> <p_threshold>
+
+# Example (using recommended parameters):
+bash code/cv_final_model.sh temp/npi_dpr_ever.pheno 0.1 0.005
+```
+
+**Outputs:**
+- `final/full_cohort.prs.best` - Final PRS scores for all individuals
+- `final/full_cohort.prs.summary` - Performance on full cohort
+- `final/full_cohort.prs.snp` - SNPs included in final PRS
+- `final/parameters_used.txt` - Record of parameters and rationale
+
+**⚠️ Important:** Performance metrics from Step 6 are **optimistically biased** (trained on full data). Always report **CV test results** from Step 5 for performance claims.
+
+---
+
+### Output Directory Structure
+```
+temp/cv5/<outcome>/
+├── folds/
+│   ├── fold_assignments.csv
+│   ├── train_fold_1.keep ... train_fold_5.keep
+│   └── test_fold_1.keep ... test_fold_5.keep
+├── training/
+│   ├── fold_1_r2_0_01.prsice ... (all parameter combinations)
+│   └── best_params_per_fold.csv
+├── testing/
+│   ├── fold_1_test.best ... fold_5_test.best
+│   └── test_results.csv
+├── results/
+│   ├── cv_summary.txt
+│   ├── recommended_params.txt
+│   ├── cv_results_*.csv (3 files)
+│   ├── forest_plot_data.csv
+│   ├── auc_by_fold.csv
+│   ├── quantile_summary.csv
+│   ├── quantile_regression_coefs.csv
+│   └── figure*.png (4 figures)
+├── final/
+│   ├── full_cohort.prs.best
+│   ├── full_cohort.prs.summary
+│   ├── full_cohort.prs.snp
+│   └── parameters_used.txt
+└── logs/
+    └── *.log (PRSice log files)
+```
+
+
+
+### Citation
+
+If using this CV framework, cite:
+- PRSice-2: Choi & O'Reilly, GigaScience 2019
+
+---
+
+### Notes
+- **Final PRS** from Step 6 is for external validation only
