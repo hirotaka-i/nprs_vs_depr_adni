@@ -73,6 +73,8 @@ gds_subset <- gdscale %>%
     GDS5 = if_else(GDTOTAL >= 5, 1, 0),
     GDS10 = if_else(GDTOTAL >= 10, 1, 0)
   ) %>% 
+  # Convert 'sc' to 'bl' to join baseline visits
+  mutate(VISCODE = if_else(VISCODE == "sc", "bl", VISCODE)) %>%  
   distinct(RID, VISCODE, .keep_all = TRUE)  # Keep only unique RID-VISCODE combinations
 
 # Select NPI variables from  npi (NPI_DPR = NPI Depression, NPI_ANX = NPI Anxiety)
@@ -135,11 +137,19 @@ print(table(pheno$timepoint, pheno$GDS5, useNA = "ifany"))
 cat("\n=== GDS >= 10 by timepoint ===\n")
 print(table(pheno$timepoint, pheno$GDS10, useNA = "ifany"))
 
+cat("\nGDS availability by DX.bl:\n")
+pheno %>% filter(!is.na(GDS5)) %>%
+  with(table(timepoint, DX.bl)) %>% print()
+
 cat("\n=== NPI Depression by timepoint ===\n")
 print(table(pheno$timepoint, pheno$NPI_DPR, useNA = "ifany"))
 
 cat("\n=== NPI Anxiety by timepoint ===\n")
 print(table(pheno$timepoint, pheno$NPI_ANX, useNA = "ifany"))
+
+cat("\nNPI_DPR availability by DX.bl:\n")
+pheno %>% filter(!is.na(NPI_DPR)) %>%
+  with(table(timepoint, DX.bl)) %>% print()
 
 # Summary statistics
 cat("\n=== Summary Statistics ===\n")
